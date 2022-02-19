@@ -101,12 +101,10 @@ class GraphSVX():
                 with torch.no_grad():
                     if target_type == 'class':
                         true_conf, true_pred = self.model(
-                            self.data.x.cuda(), 
-                            self.data.edge_index.cuda()).exp()[node_index].max(dim=0)
+                            self.data.clone().cuda()).exp()[node_index].max(dim=0)
                     elif target_type == 'reg':
                         true_conf = true_pred = self.model(
-                            self.data.x.cuda(), 
-                            self.data.edge_index.cuda())[node_index]
+                            self.data.clone().cuda())[node_index]
                     else:
                         print("target_type not recognized, exiting.")
                         exit()
@@ -115,12 +113,10 @@ class GraphSVX():
                 with torch.no_grad():
                     if target_type == 'class':
                         true_conf, true_pred = self.model(
-                            self.data.x, 
-                            self.data.edge_index).exp()[node_index].max(dim=0)
+                            self.data).exp()[node_index].max(dim=0)
                     elif target_type == 'reg':
                         true_conf = true_pred = self.model(
-                            self.data.x, 
-                            self.data.edge_index)[node_index]
+                            self.data)[node_index]
                     else:
                         print("target_type not recognized, exiting.")
                         exit()
@@ -1083,19 +1079,21 @@ class GraphSVX():
                             X[path[n], :] = X[node_index, :]  # av_feat_values
                             # TODO: eval this against av.values.
 
-            # Apply model on new (X,A) 
+            # Apply model on new (X,A)
+            new_data = self.data.clone()
+            new_data.x, new_data.edge_index = X, A
             if self.gpu:
                 with torch.no_grad():
                     if target_type == 'class':
-                        proba = self.model(X.cuda(), A.cuda()).exp()[node_index]
+                        proba = self.model(new_data.cuda()).exp()[node_index]
                     elif target_type == 'reg':
-                        proba = self.model(X.cuda(), A.cuda())[node_index]
+                        proba = self.model(new_data.cuda())[node_index]
             else:
                 with torch.no_grad():
                     if target_type == 'class':
-                        proba = self.model(X, A).exp()[node_index]
+                        proba = self.model(new_data).exp()[node_index]
                     elif target_type == 'reg':
-                        proba = self.model(X, A)[node_index]
+                        proba = self.model(new_data)[node_index]
 
             # Store predicted class label in fz
             if multiclass:
