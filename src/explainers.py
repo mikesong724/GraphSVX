@@ -28,7 +28,6 @@ from src.plots import (denoise_graph, k_hop_subgraph, log_graph,
                        visualize_subgraph, custom_to_networkx)
 
 
-
 class GraphSVX():
 
     def __init__(self, data, model, gpu=False):
