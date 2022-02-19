@@ -29,6 +29,7 @@ def main():
     # Load the model
     model_path = 'models/{}_model_{}.pth'.format(args.model, args.dataset)
     model = torch.load(model_path)
+    print(model)
     
     # Evaluate the model 
     if args.dataset in ['Cora', 'PubMed']:
@@ -39,7 +40,8 @@ def main():
 
     # Explain it with GraphSVX
     explainer = GraphSVX(data, model, args.gpu)
-
+    print(model(data.x, data.edge_index)[500].exp())
+    print(args.indexes)
     # Distinguish graph classfication from node classification
     if args.dataset in ['Mutagenicity', 'syn6']:
         explanations = explainer.explain_graphs(args.indexes,
@@ -56,10 +58,12 @@ def main():
                                          args.regu,
                                          True)
     else: 
+        args.info=True
         explanations = explainer.explain(args.indexes,
                                         args.hops,
                                         args.num_samples,
                                         args.info,
+                                        'class',
                                         args.multiclass,
                                         args.fullempty,
                                         args.S,
@@ -68,8 +72,7 @@ def main():
                                         args.coal,
                                         args.g,
                                         args.regu,
-                                        True)
-
+                                        False)
     print('Sum explanations: ', [np.sum(explanation) for explanation in explanations])
     print('Base value: ', explainer.base_values)
 

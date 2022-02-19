@@ -51,6 +51,7 @@ class GraphSVX():
                 hops=2,
                 num_samples=10,
                 info=True,
+                target_type='class',
                 multiclass=False,
                 fullempty=None,
                 S=3,
@@ -99,14 +100,31 @@ class GraphSVX():
                     'cuda' if torch.cuda.is_available() else 'cpu')
                 self.model = self.model.to(device)
                 with torch.no_grad():
-                    true_conf, true_pred = self.model(
-                        self.data.x.cuda(), 
-                        self.data.edge_index.cuda()).exp()[node_index].max(dim=0)
+                    if target_type == 'class':
+                        true_conf, true_pred = self.model(
+                            self.data.x.cuda(), 
+                            self.data.edge_index.cuda()).exp()[node_index].max(dim=0)
+                    elif target_type == 'reg':
+                        true_conf = true_pred = self.model(
+                            self.data.x.cuda(), 
+                            self.data.edge_index.cuda())[node_index]
+                    else:
+                        print("target_type not recognized, exiting.")
+                        exit()
+                
             else: 
                 with torch.no_grad():
-                    true_conf, true_pred = self.model(
-                        self.data.x, 
-                        self.data.edge_index).exp()[node_index].max(dim=0)
+                    if target_type == 'class':
+                        true_conf, true_pred = self.model(
+                            self.data.x, 
+                            self.data.edge_index).exp()[node_index].max(dim=0)
+                    elif target_type == 'reg':
+                        true_conf = true_pred = self.model(
+                            self.data.x, 
+                            self.data.edge_index)[node_index]
+                    else:
+                        print("target_type not recognized, exiting.")
+                        exit()
 
             # --- Node selection ---
             # Investigate k-hop subgraph of the node of interest (v)
@@ -161,7 +179,7 @@ class GraphSVX():
             # Retrieve z' from z and x_v, then compute f(z')
             fz = eval('self.' + args_hv)(node_index, num_samples, D, z_,
                                         feat_idx, one_hop_neighbours, args_K, args_feat,
-                                        discarded_feat_idx, multiclass, true_pred)
+                                        discarded_feat_idx, multiclass, true_pred, target_type)
 
             # --- EXPLANATION GENERATOR --- 
             # Train Surrogate Weighted Linear Regression - learns shapley values
@@ -178,7 +196,7 @@ class GraphSVX():
             # Print information
             if info:
                 self.print_info(D, node_index, phi, feat_idx,
-                                true_pred, true_conf, base_value, multiclass)
+                                true_pred, true_conf, base_value, multiclass, target_type)
 
             # Visualise
             if vizu:
@@ -972,7 +990,7 @@ class GraphSVX():
 
         return fz
 
-    def compute_pred(self, node_index, num_samples, D, z_, feat_idx, one_hop_neighbours, args_K, args_feat, discarded_feat_idx, multiclass, true_pred):
+    def compute_pred(self, node_index, num_samples, D, z_, feat_idx, one_hop_neighbours, args_K, args_feat, discarded_feat_idx, multiclass, true_pred, target_type='class'):
         """ Construct z' from z and compute prediction f(z') for each sample z
             In fact, we build the dataset (z, f(z')), required to train the weighted linear model.
             Standard method
@@ -1069,16 +1087,25 @@ class GraphSVX():
             # Apply model on new (X,A) 
             if self.gpu:
                 with torch.no_grad():
-                    proba = self.model(X.cuda(), A.cuda()).exp()[node_index]
+                    if target_type == 'class':
+                        proba = self.model(X.cuda(), A.cuda()).exp()[node_index]
+                    elif target_type == 'reg':
+                        proba = self.model(X.cuda(), A.cuda())[node_index]
             else:
                 with torch.no_grad():
-                    proba = self.model(X, A).exp()[node_index]
+                    if target_type == 'class':
+                        proba = self.model(X, A).exp()[node_index]
+                    elif target_type == 'reg':
+                        proba = self.model(X, A)[node_index]
 
             # Store predicted class label in fz
             if multiclass:
                 fz[key] = proba
             else:
-                fz[key] = proba[true_pred]
+                if target_type == 'class':
+                    fz[key] = proba[true_pred]
+                elif target_type == 'reg':
+                    fz[key] = proba
                 
         return fz
 
@@ -1494,13 +1521,17 @@ class GraphSVX():
     # INFO ON EXPLANATIONS
     ################################
 
-    def print_info(self, D, node_index, phi, feat_idx, true_pred, true_conf, base_value, multiclass):
+    def print_info(self, D, node_index, phi, feat_idx, true_pred, true_conf, base_value, multiclass, target_type):
         """
         Displays some information about explanations - for a better comprehension and audit
         """
         # Print some information
-        print('Explanations include {} node features and {} neighbours for this node\
-        for {} classes'.format(self.F, D, self.data.num_classes))
+        if target_type == 'class':
+            print('Explanations include {} node features and {} neighbours for this node\
+            for {} classes'.format(self.F, D, self.data.num_classes))
+        elif target_type == 'reg':
+            print('Explanations include {} node features and {} neighbours for this node\
+            '.format(self.F, D))
 
         # Compare with true prediction of the model - see what class should truly be explained
         print('Model prediction is class {} with confidence {}, while true label is {}'
@@ -1511,7 +1542,7 @@ class GraphSVX():
 
         # Isolate explanations for predicted class - explain model choices
         if multiclass:
-            pred_explanation = phi[true_pred, :]
+            pred_explanation = phi[:, true_pred]
         else:
             pred_explanation = phi
 
