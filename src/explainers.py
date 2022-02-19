@@ -1376,7 +1376,7 @@ class GraphSVX():
         y_pred = z_.detach().numpy() @ phi
         if info:
             print('r2: ', r2_score(fz, y_pred))
-            print('weighted r2: ', r2_score(fz, y_pred, weights))
+            print('weighted r2: ', r2_score(fz, y_pred, sample_weight=weights))
 
         return phi[:-1], phi[-1]
 
@@ -1528,13 +1528,16 @@ class GraphSVX():
         if target_type == 'class':
             print('Explanations include {} node features and {} neighbours for this node\
             for {} classes'.format(self.F, D, self.data.num_classes))
+            print('Model prediction is class {} with confidence {}, while true label is {}'
+              .format(true_pred, true_conf, self.data.y[node_index]))
         elif target_type == 'reg':
             print('Explanations include {} node features and {} neighbours for this node\
             '.format(self.F, D))
+            print('Model prediction is {}, while true target is {}'
+              .format(true_pred, self.data.y[node_index]))
 
         # Compare with true prediction of the model - see what class should truly be explained
-        print('Model prediction is class {} with confidence {}, while true label is {}'
-              .format(true_pred, true_conf, self.data.y[node_index]))
+        
 
         # Print base value
         print('Base value', base_value, 'for class ', true_pred.item())
