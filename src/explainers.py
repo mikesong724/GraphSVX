@@ -447,7 +447,6 @@ class GraphSVX():
 
                 # GraphSVX Kernel: define weights associated with each sample 
                 weights = self.shapley_kernel(s, self.M)
-                
             return z_, weights
 
     def NewSmarterSeparate(self, num_samples, args_K, regu):
@@ -1049,7 +1048,15 @@ class GraphSVX():
             A = np.array(self.data.edge_index)
             A = np.delete(A, positions, axis=1)
             A = torch.tensor(A)
- 
+
+            if hasattr(self.data, 'edge_type') and self.data.edge_type != None:
+                T = np.array(self.data.edge_type)
+                T = np.delete(T, positions)
+                T = torch.tensor(T)
+            if hasattr(self.data, 'edge_attr') and self.data.edge_attr != None:
+                E = np.array(self.data.edge_attr)
+                E = np.delete(E, positions, axis=0)
+                E = torch.tensor(E)
             # Set features not in the sampled coalition to an average value
             X = deepcopy(self.data.x)
             X[node_index, ex_feat] = av_feat_values[ex_feat]
@@ -1078,10 +1085,22 @@ class GraphSVX():
                                             [[path[n-1]], [path[n]]])), dim=-1)
                             X[path[n], :] = X[node_index, :]  # av_feat_values
                             # TODO: eval this against av.values.
+                            if hasattr(self.data, 'edge_type') and self.data.edge_type != None:
+                                base_type = torch.unique(self.data.edge_type,sorted=True)[0]
+                                T = torch.cat( (T, torch.tensor( [base_type] ).reshape(1)), axis=0)
+                            if hasattr(self.data, 'edge_attr') and self.data.edge_attr != None:
+                                edge_to_search = torch.tensor([[path[n-1]], [path[n]]])
+                                index_to_add = torch.where( (self.data.edge_index==edge_to_search).all(dim=0) )[0][0]
+                                edge_attr_to_add = self.data.edge_attr[index_to_add,:].reshape(1,-1)
+                                E = torch.cat((E, edge_attr_to_add), dim=0)
 
             # Apply model on new (X,A)
             new_data = self.data.clone()
             new_data.x, new_data.edge_index = X, A
+            if hasattr(new_data, 'edge_type') and self.data.edge_type != None:
+                new_data.edge_type = T
+            if hasattr(new_data, 'edge_attr') and self.data.edge_attr != None:
+                new_data.edge_attr = E
             if self.gpu:
                 with torch.no_grad():
                     if target_type == 'class':
